@@ -1,0 +1,9 @@
+# YAML
+DIR:
+  DATA: '/home/doga/DataFolder/hs_data'
+  RESULTS: '/home/doga/DataFolder/bdResults'
+  CLUSTER: '/home/doga/DataFolder/hs_clusters'
+  COMB: '/home/doga/DataFolder/hs_clustersCombs'
+  MODEL_EXPORTS: '/home/doga/DataFolder/hs_modelExports'
+OTHER:
+  RANDOM_SEED: 5
