@@ -1,7 +1,6 @@
 # HospiSign - Semi-Supervised Discovery of Hand-Shapes in Turkish Sign Language
 The code related to the paper "Semi-Supervised Discovery of Hand-Shapes in Turkish Sign Language"
-
-The code will be added here until October 15 2020
+The paper is in review stage at "Language Resources and Evaluation - Springer"
 
 ## Setup
 
@@ -42,6 +41,7 @@ So that the folders will be correctly used by the code
 ## Dataset
 
 The dataset details are at [Mendeley Data](https://data.mendeley.com/datasets/dymz94c393/draft?preview=1)
+Files also uploaded to a website and data can be downloaded through the code below.
 ```python
 import projRelatedHelperFuncs as prHF
 import scriptFile as sf
