@@ -59,7 +59,7 @@ def getMatFile(data_dir, signCnt, possible_fname_init):
     return mat
 
 #SUBMIT_CHECK
-def run_clustering_hospisign(ft, labels_all, lb_map, dataToUse, numOfSigns, pcaCount, clustCntVec = None, clusterModels = ['KMeans'], randomSeed=5):
+def run_clustering_hospisign(ft, labels_all, lb_map, dataToUse, numOfSigns, pcaCount, clustCntVec = None, clusterModels = ['KMeans'], randomSeed=5, enforce_rerun=False):
     seed(randomSeed)
     prevPrintOpts = np.get_printoptions()
     np.set_printoptions(precision=4, suppress=True)
@@ -95,7 +95,7 @@ def run_clustering_hospisign(ft, labels_all, lb_map, dataToUse, numOfSigns, pcaC
         for curClustCnt in clustCntVec:
             foundResult = False
             for resultList in resultDict:
-                if resultList[1] == clusterModel and resultList[2] == curClustCnt:
+                if (resultList[1] == clusterModel and resultList[2] == curClustCnt):
                     str2disp = headerStrFormat + "=" + valuesStrFormat
                     data2disp = (baseResultFileName, resultList[1], resultList[2],
                                  resultList[3][0],
@@ -106,13 +106,16 @@ def run_clustering_hospisign(ft, labels_all, lb_map, dataToUse, numOfSigns, pcaC
                     print(str2disp % data2disp)
                     foundResult = True
                 if foundResult:
-                    break
+                    if not enforce_rerun:
+                        break
             predictionFileName = baseResultFileName.replace("_baseResults.npy", "") + "_" + clusterModel + "_" + str(curClustCnt) + ".npz"
             predictionFileNameFull = os.path.join(results_dir, 'baseResults', predictionFileName)
             predictionFileExist = os.path.isfile(predictionFileNameFull)
-            if not foundResult or not predictionFileExist:
+            if not foundResult or not predictionFileExist or enforce_rerun:
                 if foundResult and not predictionFileExist:
                     print('running again for saving predictions')
+                if enforce_rerun:
+                    print('rerunning the experiment is enforced')
                 t = time.time()
                 print(datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
                 print(featsName, 'clusterModel(', clusterModel, '), clusterCount(', curClustCnt, ') running.')
@@ -135,11 +138,14 @@ def run_clustering_hospisign(ft, labels_all, lb_map, dataToUse, numOfSigns, pcaC
 
                 print(valuesStrFormat % (nmi_cur,  acc_center, meanPurity_center, weightedPurity_center, acc_mxhist, meanPurity_mxhist, weightedPurity_mxhist, cnmxh_perc, numOf_1_sample_bins))
                 print("histogram of clusters max first 10", resultList[3][9][0:10])
+                if foundResult and predictionFileExist and enforce_rerun:
+                    print("the results wont be saved due to the rerunning situation")
+                    break
                 np.save(baseResultFileNameFull, resultDict, allow_pickle=True)
                 np.savez(predictionFileNameFull, labels_all, predClusters)
 
     np.set_printoptions(prevPrintOpts)
-    return resultDict
+    return resultDict, centroid_info_pdf
 
 def loadBaseResult(fileName):
     results_dir = funcH._CONF_PARAMS_.DIR.RESULTS  # '/media/dg/SSD_Data/DataPath/bdResults'
@@ -625,11 +631,19 @@ def get_hospisign_feats(dataset_ident_str = "Dev", labelsSortBy=None, verbose=0)
         "label_map": label_map,
     }
     return ft, lab
-    # TILL HERE
+
+def f_apply_pca(ft, data_ident, pca_dim):
+    #  ftpca, exp_vec, exp_val = f_apply_pca(ft, "hg", pca_dim)
+    ftpca, exp_vec = funcH.applyMatTransform(ft[data_ident], applyPca=True, normMode="", verbose=1)
+    data_dim = ftpca.shape[1]
+    print("data_dim({}),pca_dim({}),exp_vec({})".format(data_dim,pca_dim,len(exp_vec)))
+    slc_dim = min(data_dim,pca_dim)
+    ftpca = ftpca[:, 0:slc_dim]
+    return ftpca, exp_vec, exp_vec[slc_dim-1]
 
 #SUBMIT_CHECKED
-def combine_pca_hospisign_data(data_ident, pca_dim, dataset_ident_str ="Dev", verbose=0):
-    ft, lab = get_hospisign_feats(dataset_ident_str=dataset_ident_str, verbose=verbose)
+def combine_pca_hospisign_data(data_ident, pca_dim, dataset_ident_str="Dev", verbose=1, concat_method=1):
+    ft, lab = get_hospisign_feats(dataset_ident_str=dataset_ident_str, verbose=verbose - 1)
     if verbose > 0:
         print('hg_ft.shape = ', ft["hg"].shape, ', sn_ft.shape = ', ft["sn"].shape, ', sk_ft.shape = ', ft["sk"].shape)
         print("hg - min(", ft["hg"].min(), "), max(", ft["hg"].max(), ")")
@@ -661,26 +675,44 @@ def combine_pca_hospisign_data(data_ident, pca_dim, dataset_ident_str ="Dev", ve
         if verbose > 0:
             print("nan_sk: ", nan_sk)
 
+    explainibility_vec_dict = {"hg": np.nan, "sn": np.nan, "sk": np.nan, data_ident: np.nan}
+    explainibility_val_dict = {"hg": np.nan, "sn": np.nan, "sk": np.nan, data_ident: np.nan}
+
     if (data_ident == "hog" or data_ident == "hg"):
-        feats = ft["hg"]
+        feats = ft["hg"].copy()
     elif (data_ident == "skeleton" or data_ident == "sk"):
-        feats = ft["sk"]
+        feats = ft["sk"].copy()
     elif (data_ident == "snv" or data_ident == "sn"):
-        feats = ft["sn"]
-    elif (data_ident == "hgsk"):
-        feats = np.concatenate([ft["hg"].T, ft["sk"].T]).T
-    elif (data_ident == "hgsn"):
-        feats = np.concatenate([ft["hg"].T, ft["sn"].T]).T
-    elif (data_ident == "snsk"):
-        feats = np.concatenate([ft["sn"].T, ft["sk"].T]).T
-    elif (data_ident == "hgsnsk"):
-        feats = np.concatenate([ft["hg"].T, ft["sn"].T, ft["sk"].T]).T
+        feats = ft["sn"].copy()
+    elif concat_method == 1:
+        if (data_ident == "hgsk"):
+            feats = np.concatenate([ft["hg"].T, ft["sk"].T]).T
+        elif (data_ident == "hgsn"):
+            feats = np.concatenate([ft["hg"].T, ft["sn"].T]).T
+        elif (data_ident == "snsk"):
+            feats = np.concatenate([ft["sn"].T, ft["sk"].T]).T
+        elif (data_ident == "hgsnsk"):
+            feats = np.concatenate([ft["hg"].T, ft["sn"].T, ft["sk"].T]).T
+    else:  # first get pca of the original data then
+        ft_hg_pca, explainibility_vec_dict["hg"], explainibility_val_dict["hg"] = f_apply_pca(ft, "hg", pca_dim)
+        ft_sk_pca, explainibility_vec_dict["sk"], explainibility_val_dict["sk"] = f_apply_pca(ft, "sk", pca_dim)
+        ft_sn_pca, explainibility_vec_dict["sn"], explainibility_val_dict["sn"] = f_apply_pca(ft, "sn", pca_dim)
+        if (data_ident == "hgsk"):
+            feats = np.concatenate([ft_hg_pca.T, ft_sk_pca.T]).T
+        elif (data_ident == "hgsn"):
+            feats = np.concatenate([ft_hg_pca.T, ft_sn_pca.T]).T
+        elif (data_ident == "snsk"):
+            feats = np.concatenate([ft_sn_pca.T, ft_sk_pca.T]).T
+        elif (data_ident == "hgsnsk"):
+            feats = np.concatenate([ft_hg_pca.T, ft_sn_pca.T, ft_sk_pca.T]).T
 
     feats_pca, exp_var_rat = funcH.applyMatTransform(feats, applyPca=True, normMode="", verbose=verbose)
     feats = feats_pca[:, 0:pca_dim]
-    print(data_ident, '.shape = ', feats.shape, ' loaded.')
+    explainibility_vec_dict[data_ident] = exp_var_rat
+    explainibility_val_dict[data_ident] = exp_var_rat[pca_dim]
+    print(data_ident, '.shape = ', feats.shape, ' loaded.', explainibility_val_dict[data_ident], '<--explainibility.')
 
-    return feats, lab["labels"], lab["labels_sui"], lab["label_map"]
+    return feats, lab["labels"], lab["labels_sui"], lab["label_map"], explainibility_vec_dict, explainibility_val_dict
 
 #SUBMIT_CHECK
 def get_result_table_out(result_file_name_full, class_names):

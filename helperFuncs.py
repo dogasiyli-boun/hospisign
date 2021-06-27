@@ -283,7 +283,7 @@ def clusterData(featVec, n_clusters, normMode='', applyPca=True, clusterModel='K
         kluster_centers = None
         if clusterModel == 'KMeans':
                 #default vals for kmeans --> max_iter=300, 1e-4
-                kmeans_result = KMeans(n_clusters=n_clusters, n_init=5, tol=curTol, max_iter=max_iter).fit(df)
+                kmeans_result = KMeans(n_clusters=n_clusters, n_init=20, tol=curTol, max_iter=max_iter).fit(df)
                 predictedKlusters = kmeans_result.labels_.astype(float)
                 kluster_centers = kmeans_result.cluster_centers_.astype(float)
         elif clusterModel == 'GMM_full':
@@ -836,7 +836,7 @@ def calcCluster2ClassMetrics(labels_true, labels_pred, labelNames=None, predictD
         weightedRecall += wr
         weightedF1Score += wf
 
-        cStr = ["c(" + class_cur + ")" if labelNames is None else labelNames[class_cur]]
+        cStr = ["c(" + str(class_cur) + ")" if labelNames is None else labelNames[class_cur]]
         c_data.append([cStr, correctCnt, precisionCur, recallCur, f1Cur, wp, wr, wf])
     c_pdf = pd_df(c_data, columns=['class', '#', '%prec', '%recall', '%f1', '%wp', '%wr', '%wf'])
     c_pdf.sort_values(by=['%f1', '#'], inplace=True, ascending=[False, False])

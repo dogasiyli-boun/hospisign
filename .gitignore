@@ -2,3 +2,7 @@
 .idea/
 
 __pycache__/
+
+.ipynb_checkpoints/
+
+dists_for_web/
